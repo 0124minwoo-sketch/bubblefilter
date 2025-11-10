@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>카메라 촬영 및 저장/공유</title>
   <style>
     body {
@@ -18,6 +18,7 @@
       color: white;
       font-family: sans-serif;
     }
+
     #camera-container {
       position: relative;
       width: 90vw;
@@ -31,15 +32,17 @@
       height: 100%;
       object-fit: cover;
     }
+
     #filter-overlay {
       position: absolute;
       inset: 0;
-      background-image: url('filter.png'); /* 여기에 필터 PNG 파일 이름 지정 */
+      background-image: url('filter.png'); /* 필터용 PNG 이미지 경로 */
       background-size: cover;
       background-position: center;
       opacity: 0.4; /* 불투명도 조정 */
       pointer-events: none;
     }
+
     #preview {
       display: none;
       width: 100%;
@@ -47,11 +50,15 @@
       border-radius: 12px;
       margin-top: 10px;
     }
+
     #controls {
       margin-top: 20px;
       display: flex;
+      flex-wrap: wrap;
       gap: 10px;
+      justify-content: center;
     }
+
     button {
       background-color: #1e90ff;
       border: none;
@@ -61,6 +68,7 @@
       border-radius: 6px;
       cursor: pointer;
     }
+
     button:disabled {
       background-color: #555;
       cursor: not-allowed;
@@ -74,10 +82,11 @@
   </div>
 
   <canvas id="snapshot" style="display:none;"></canvas>
-  <img id="preview" alt="촬영된 이미지">
+  <img id="preview" alt="촬영된 이미지" />
 
   <div id="controls">
-    <button id="captureBtn">📷 촬영</button>
+    <button id="switchBtn">🔄 카메라 전환</button>
+    <button id="captureBtn">📸 촬영</button>
     <button id="saveBtn" disabled>💾 저장</button>
     <button id="shareBtn" disabled>📤 공유</button>
   </div>
@@ -86,19 +95,41 @@
     const video = document.getElementById('camera');
     const canvas = document.getElementById('snapshot');
     const preview = document.getElementById('preview');
+    const switchBtn = document.getElementById('switchBtn');
     const captureBtn = document.getElementById('captureBtn');
     const saveBtn = document.getElementById('saveBtn');
     const shareBtn = document.getElementById('shareBtn');
 
-    // 카메라 시작
-    async function initCamera() {
+    let currentFacingMode = 'user'; // 기본은 전면 카메라
+    let stream;
+
+    // 카메라 초기화 함수
+    async function initCamera(facingMode = 'user') {
+      if (stream) {
+        const tracks = stream.getTracks();
+        tracks.forEach(track => track.stop());
+      }
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: facingMode },
+          audio: false
+        });
         video.srcObject = stream;
+        currentFacingMode = facingMode;
       } catch (err) {
-        alert("카메라 접근이 불가능합니다: " + err.message);
+        alert("카메라 접근 오류: " + err.message);
       }
     }
+
+    // 처음 카메라 실행
+    initCamera(currentFacingMode);
+
+    // 카메라 전환 버튼 클릭 시
+    switchBtn.addEventListener('click', () => {
+      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+      initCamera(currentFacingMode);
+    });
 
     // 사진 촬영
     captureBtn.addEventListener('click', () => {
@@ -107,11 +138,11 @@
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // PNG 필터를 오버레이로 추가
+      // 필터 오버레이 적용
       const filter = new Image();
       filter.src = 'filter.png';
       filter.onload = () => {
-        context.globalAlpha = 0.4; // 불투명도 조정
+        context.globalAlpha = 0.4; // 필터 불투명도
         context.drawImage(filter, 0, 0, canvas.width, canvas.height);
         context.globalAlpha = 1.0;
 
@@ -131,7 +162,7 @@
       link.click();
     });
 
-    // 공유 기능 (모바일 브라우저 또는 지원 브라우저에서만 작동)
+    // 공유 기능
     shareBtn.addEventListener('click', async () => {
       if (navigator.share) {
         try {
@@ -150,8 +181,6 @@
         alert('해당 브라우저에서는 공유 기능이 지원되지 않습니다.');
       }
     });
-
-    initCamera();
   </script>
 </body>
 </html>
