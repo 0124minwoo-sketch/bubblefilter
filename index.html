@@ -15,10 +15,10 @@
       height: 100vh;
       color: white;
       font-family: sans-serif;
-      overflow: hidden; /* 전체 스크롤 막기 */
+      overflow: hidden;
     }
 
-    /* [1] 카메라 화면 */
+    /* [1] 카메라 영역 */
     #camera-container {
       position: relative;
       flex: 1;
@@ -40,7 +40,7 @@
     #filter-overlay {
       position: absolute;
       inset: 0;
-      background-image: url('filter1.png'); /* ✅ 기본 필터 */
+      background-image: url('filter1.png'); /* 기본 필터 */
       background-size: cover;
       background-position: center;
       opacity: 1;
@@ -53,27 +53,28 @@
       z-index: 2;
     }
 
-    /* [2] 필터 조절 영역 — 하단 버튼과 겹치지 않음 */
-    #filter-controls {
+    /* [2] 필터 조절 영역 (토글로 열리고 닫힘) */
+    #filter-panel {
+      position: fixed;
+      bottom: 70px;
+      left: 0;
       width: 100%;
       max-width: 600px;
-      background: rgba(0, 0, 0, 0.7);
-      backdrop-filter: blur(3px);
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: 15px 0 90px; /* 하단 버튼 높이만큼 여백 확보 */
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(6px);
+      padding: 15px 0 20px;
       box-sizing: border-box;
-      position: relative;
-      z-index: 5; /* 버튼보다 앞에 */
+      display: none; /* 초기에는 닫힘 상태 */
+      z-index: 9;
+      transition: transform 0.3s ease;
+      border-top: 1px solid rgba(255,255,255,0.2);
     }
 
     #slider-container {
       width: 80%;
       max-width: 400px;
       text-align: center;
-      margin-bottom: 12px;
+      margin: 0 auto 12px;
     }
 
     input[type="range"] {
@@ -83,7 +84,7 @@
     #filter-selector {
       display: flex;
       justify-content: center;
-      gap: 12px;
+      gap: 10px;
     }
 
     .filter-option {
@@ -101,7 +102,7 @@
       border: 2px solid #1e90ff;
     }
 
-    /* [3] 하단 고정 버튼 */
+    /* [3] 하단 컨트롤 */
     #controls {
       position: fixed;
       bottom: 0;
@@ -110,10 +111,10 @@
       justify-content: center;
       flex-wrap: wrap;
       gap: 10px;
-      padding: 12px 0;
+      padding: 10px 0 12px;
       background: rgba(0, 0, 0, 0.8);
       z-index: 10;
-      box-shadow: 0 -2px 8px rgba(0,0,0,0.7);
+      box-shadow: 0 -2px 6px rgba(0,0,0,0.5);
     }
 
     button {
@@ -131,19 +132,23 @@
       color: #aaa;
       cursor: not-allowed;
     }
+
+    #toggleFilterBtn {
+      background-color: #32cd32;
+    }
   </style>
 </head>
 <body>
 
-  <!-- 📸 카메라 영역 -->
+  <!-- 📸 카메라 -->
   <div id="camera-container">
     <video id="camera" autoplay playsinline></video>
     <div id="filter-overlay"></div>
     <img id="preview" alt="촬영된 이미지" />
   </div>
 
-  <!-- 🎨 필터 조절 영역 -->
-  <div id="filter-controls">
+  <!-- 🎨 필터 조절 패널 (토글 가능) -->
+  <div id="filter-panel">
     <div id="slider-container">
       <label for="opacitySlider">필터 투명도: <span id="opacityValue">100%</span></label>
       <input type="range" id="opacitySlider" min="0" max="100" value="100" />
@@ -163,6 +168,7 @@
     <button id="switchBtn">🔄 전/후면 전환</button>
     <button id="captureBtn">📸 촬영</button>
     <button id="retryBtn" style="display:none;">↩ 다시</button>
+    <button id="toggleFilterBtn">🎨 필터 설정 열기</button>
     <button id="saveBtn" disabled>💾 저장</button>
     <button id="shareBtn" disabled>📤 공유</button>
   </div>
@@ -177,16 +183,19 @@
     const saveBtn = document.getElementById('saveBtn');
     const shareBtn = document.getElementById('shareBtn');
     const switchBtn = document.getElementById('switchBtn');
+    const toggleFilterBtn = document.getElementById('toggleFilterBtn');
     const opacitySlider = document.getElementById('opacitySlider');
     const opacityValue = document.getElementById('opacityValue');
     const filterSelector = document.getElementById('filter-selector');
+    const filterPanel = document.getElementById('filter-panel');
 
     let stream;
-    let currentFacingMode = 'environment'; // 기본 후면
+    let currentFacingMode = 'environment'; // 기본: 후면
     let currentOpacity = 1.0;
-    let currentFilter = 'filter1.png'; // ✅ 기본 필터 선택
+    let currentFilter = 'filter1.png'; // 기본 필터
+    let filterPanelOpen = false; // 필터 패널 상태
 
-    // 🎥 카메라 실행
+    // 📷 카메라 실행
     async function initCamera(facingMode = 'environment') {
       if (stream) stream.getTracks().forEach(t => t.stop());
       try {
@@ -204,6 +213,14 @@
     switchBtn.addEventListener('click', () => {
       currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
       initCamera(currentFacingMode);
+    });
+
+    // 🎨 필터 영역 열기/닫기
+    toggleFilterBtn.addEventListener('click', () => {
+      filterPanelOpen = !filterPanelOpen;
+      filterPanel.style.display = filterPanelOpen ? 'block' : 'none';
+      toggleFilterBtn.textContent = filterPanelOpen ? '❌ 필터 설정 닫기' : '🎨 필터 설정 열기';
+      toggleFilterBtn.style.backgroundColor = filterPanelOpen ? '#ff6347' : '#32cd32';
     });
 
     // 🎚 투명도 조절
@@ -248,10 +265,9 @@
           fx = 0;
           fy = (canvas.height - fh) / 2;
         }
-
         ctx.globalAlpha = currentOpacity;
         ctx.drawImage(filter, fx, fy, fw, fh);
-        ctx.globalAlpha = 1.0;
+        ctx.globalAlpha = 1;
 
         preview.src = canvas.toDataURL('image/png');
         preview.style.display = 'block';
