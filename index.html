@@ -15,9 +15,10 @@
       height: 100vh;
       color: white;
       font-family: sans-serif;
+      overflow: hidden; /* 전체 스크롤 막기 */
     }
 
-    /* 카메라 영역 */
+    /* [1] 카메라 화면 */
     #camera-container {
       position: relative;
       flex: 1;
@@ -39,7 +40,7 @@
     #filter-overlay {
       position: absolute;
       inset: 0;
-      background-image: url('filter1.png'); /* ✅ 초기 기본 필터 */
+      background-image: url('filter1.png'); /* ✅ 기본 필터 */
       background-size: cover;
       background-position: center;
       opacity: 1;
@@ -52,24 +53,27 @@
       z-index: 2;
     }
 
-    /* 필터 설정 패널 */
+    /* [2] 필터 조절 영역 — 하단 버튼과 겹치지 않음 */
     #filter-controls {
       width: 100%;
       max-width: 600px;
+      background: rgba(0, 0, 0, 0.7);
+      backdrop-filter: blur(3px);
       display: flex;
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      background: rgba(0, 0, 0, 0.6);
-      padding: 10px 0 80px; /* 버튼 겹침 방지 공간 확보 */
-      z-index: 2;
+      padding: 15px 0 90px; /* 하단 버튼 높이만큼 여백 확보 */
+      box-sizing: border-box;
+      position: relative;
+      z-index: 5; /* 버튼보다 앞에 */
     }
 
     #slider-container {
       width: 80%;
       max-width: 400px;
       text-align: center;
-      margin-bottom: 10px;
+      margin-bottom: 12px;
     }
 
     input[type="range"] {
@@ -97,20 +101,19 @@
       border: 2px solid #1e90ff;
     }
 
-    /* 하단 버튼 (항상 화면 아래 고정) */
+    /* [3] 하단 고정 버튼 */
     #controls {
       position: fixed;
       bottom: 0;
-      left: 0;
       width: 100%;
       display: flex;
       justify-content: center;
       flex-wrap: wrap;
-      gap: 8px;
-      z-index: 100;
-      background: rgba(0, 0, 0, 0.5);
+      gap: 10px;
       padding: 12px 0;
-      backdrop-filter: blur(5px);
+      background: rgba(0, 0, 0, 0.8);
+      z-index: 10;
+      box-shadow: 0 -2px 8px rgba(0,0,0,0.7);
     }
 
     button {
@@ -132,18 +135,18 @@
 </head>
 <body>
 
-  <!-- 📸 카메라 표시 -->
+  <!-- 📸 카메라 영역 -->
   <div id="camera-container">
     <video id="camera" autoplay playsinline></video>
     <div id="filter-overlay"></div>
-    <img id="preview" alt="촬영된 이미지">
+    <img id="preview" alt="촬영된 이미지" />
   </div>
 
-  <!-- 🎚 필터 선택 영역 (버튼 아래로 밀리지 않도록 고정 높이 확보) -->
+  <!-- 🎨 필터 조절 영역 -->
   <div id="filter-controls">
     <div id="slider-container">
       <label for="opacitySlider">필터 투명도: <span id="opacityValue">100%</span></label>
-      <input type="range" id="opacitySlider" min="0" max="100" value="100">
+      <input type="range" id="opacitySlider" min="0" max="100" value="100" />
     </div>
 
     <div id="filter-selector">
@@ -155,7 +158,7 @@
 
   <canvas id="snapshot" style="display:none;"></canvas>
 
-  <!-- 📱 하단 버튼 영역 -->
+  <!-- 🎛 하단 버튼 -->
   <div id="controls">
     <button id="switchBtn">🔄 전/후면 전환</button>
     <button id="captureBtn">📸 촬영</button>
@@ -179,11 +182,11 @@
     const filterSelector = document.getElementById('filter-selector');
 
     let stream;
-    let currentFacingMode = 'environment'; // ✅ 후면 기본
+    let currentFacingMode = 'environment'; // 기본 후면
     let currentOpacity = 1.0;
-    let currentFilter = 'filter1.png'; // ✅ 기본 필터 1 선택
+    let currentFilter = 'filter1.png'; // ✅ 기본 필터 선택
 
-    // 📷 카메라 실행
+    // 🎥 카메라 실행
     async function initCamera(facingMode = 'environment') {
       if (stream) stream.getTracks().forEach(t => t.stop());
       try {
@@ -211,7 +214,7 @@
       opacityValue.textContent = `${v}%`;
     });
 
-    // 🎨 필터 선택 기능
+    // 🎨 필터 선택
     filterSelector.addEventListener('click', e => {
       if (e.target.classList.contains('filter-option')) {
         document.querySelectorAll('.filter-option').forEach(opt => opt.classList.remove('selected'));
@@ -221,7 +224,7 @@
       }
     });
 
-    // 📸 촬영 기능
+    // 📸 촬영
     captureBtn.addEventListener('click', () => {
       const videoRatio = video.videoWidth / video.videoHeight;
       canvas.width = video.videoWidth;
@@ -245,9 +248,10 @@
           fx = 0;
           fy = (canvas.height - fh) / 2;
         }
+
         ctx.globalAlpha = currentOpacity;
         ctx.drawImage(filter, fx, fy, fw, fh);
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = 1.0;
 
         preview.src = canvas.toDataURL('image/png');
         preview.style.display = 'block';
