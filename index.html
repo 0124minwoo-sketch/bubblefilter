@@ -3,31 +3,30 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>스마트 카메라 필터 앱</title>
+<title>카메라 비율 자동 보정</title>
 <style>
-  :root { --vh: 100%; }
   body {
     margin: 0;
-    background: #000;
-    color: white;
-    font-family: sans-serif;
-    overflow: hidden;
+    background: black;
     display: flex;
     flex-direction: column;
     align-items: center;
-    height: calc(var(--vh, 1vh) * 100);
+    height: 100vh;
+    color: white;
+    font-family: sans-serif;
+    overflow: hidden;
   }
 
   #camera-container {
     position: relative;
     width: 100%;
     max-width: 600px;
-    background: black;
     flex-grow: 1;
+    background: #000;
     overflow: hidden;
   }
 
-  video, #preview, #filter-overlay {
+  video, #filter-overlay, #preview {
     position: absolute;
     inset: 0;
     width: 100%;
@@ -35,306 +34,157 @@
     object-fit: cover;
   }
 
-  video { z-index: 0; }
   #filter-overlay {
-    z-index: 2;
-    pointer-events: none;
     background-size: cover;
     background-position: center;
     opacity: 1;
+    pointer-events: none;
+    z-index: 2;
   }
-  #preview { z-index: 3; display: none; }
 
-  /* 🎨 필터 패널 */
-  #filter-panel {
-    position: fixed;
-    bottom: 0;
-    width: 100%;
-    max-width: 600px;
-    background: rgba(0,0,0,0.85);
-    backdrop-filter: blur(6px);
+  #preview {
     display: none;
-    text-align: center;
-    z-index: 20;
-    padding: 20px 0 30px;
+    z-index: 3;
   }
 
-  #slider-container {
-    width: 80%;
-    max-width: 400px;
-    margin: 0 auto 12px;
-  }
-
-  #filter-selector {
-    display: flex;
-    justify-content: center;
-    gap: 10px;
-    flex-wrap: wrap;
-  }
-
-  .filter-option {
-    width: 60px;
-    height: 60px;
-    border-radius: 6px;
-    background-size: cover;
-    background-position: center;
-    border: 2px solid transparent;
-    cursor: pointer;
-  }
-  .filter-option.selected { border-color: #1e90ff; }
-
-  #closeFilterBtn {
-    background-color: #ff6347;
-    border: none;
-    color: white;
-    padding: 10px 18px;
-    border-radius: 6px;
-    cursor: pointer;
-    margin-top: 10px;
-  }
-
-  /* 버튼 영역 */
   #controls {
     position: fixed;
     bottom: 0;
     width: 100%;
+    background: rgba(0,0,0,0.7);
     display: flex;
-    justify-content: center;
     flex-wrap: wrap;
+    justify-content: center;
     gap: 10px;
-    background: rgba(0,0,0,0.8);
-    padding: 10px 0;
-    z-index: 15;
-    transition: opacity 0.3s ease, transform 0.3s ease;
-  }
-
-  #controls.hidden {
-    opacity: 0;
-    transform: translateY(100%);
-    pointer-events: none;
+    padding: 10px;
   }
 
   button {
-    background-color: #1e90ff;
+    background: #1e90ff;
     color: white;
     border: none;
     border-radius: 6px;
-    padding: 10px 16px;
+    padding: 10px 15px;
     font-size: 1em;
-    cursor: pointer;
   }
-  button:disabled { background-color: #555; color: #aaa; }
-  #toggleFilterBtn { background-color: #32cd32; }
 </style>
 </head>
 <body>
 
-  <!-- 📷 카메라 세션 -->
-  <div id="camera-container">
-    <video id="camera" autoplay muted playsinline></video>
-    <div id="filter-overlay"></div>
-    <img id="preview" alt="촬영 이미지" />
-  </div>
+<div id="camera-container">
+  <video id="camera" autoplay playsinline></video>
+  <div id="filter-overlay"></div>
+  <img id="preview" alt="촬영된 이미지">
+</div>
 
-  <!-- 🎨 필터 옵션 패널 -->
-  <div id="filter-panel">
-    <div id="slider-container">
-      <label for="opacitySlider">필터 투명도: <span id="opacityValue">100%</span></label>
-      <input type="range" id="opacitySlider" min="0" max="100" value="100" />
-    </div>
+<div id="controls">
+  <button id="switchBtn">🔄 전/후면</button>
+  <button id="captureBtn">📸 촬영</button>
+  <button id="retryBtn" style="display:none;">↩ 다시</button>
+  <button id="saveBtn" disabled>💾 저장</button>
+</div>
 
-    <div id="filter-selector">
-      <div class="filter-option selected" style="background-image:url('filter1.png')" data-src="filter1.png"></div>
-      <div class="filter-option" style="background-image:url('filter2.png')" data-src="filter2.png"></div>
-      <div class="filter-option" style="background-image:url('filter3.png')" data-src="filter3.png"></div>
-    </div>
+<canvas id="snapshot" style="display:none;"></canvas>
 
-    <button id="closeFilterBtn">❌ 필터 닫기</button>
-  </div>
+<script>
+const video = document.getElementById('camera');
+const canvas = document.getElementById('snapshot');
+const preview = document.getElementById('preview');
+const filterOverlay = document.getElementById('filter-overlay');
+const switchBtn = document.getElementById('switchBtn');
+const captureBtn = document.getElementById('captureBtn');
+const retryBtn = document.getElementById('retryBtn');
+const saveBtn = document.getElementById('saveBtn');
 
-  <!-- 조작 버튼 -->
-  <div id="controls">
-    <button id="switchBtn">🔄 전/후면</button>
-    <button id="captureBtn">📸 촬영</button>
-    <button id="retryBtn" style="display:none;">↩ 다시</button>
-    <button id="toggleFilterBtn">🎨 필터 열기</button>
-    <button id="saveBtn" disabled>💾 저장</button>
-    <button id="shareBtn" disabled>📤 공유</button>
-  </div>
+let stream;
+let facingMode = 'environment';
+let currentFilter = 'filter1.png';
+let currentOpacity = 1.0;
 
-  <canvas id="snapshot" style="display:none;"></canvas>
+// ✅ 카메라 시작
+async function initCamera(mode='environment') {
+  if (stream) stream.getTracks().forEach(t=>t.stop());
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: false });
+    video.srcObject = stream;
+    facingMode = mode;
+  } catch(e) {
+    alert('카메라 접근 실패: ' + e.message);
+  }
+}
+initCamera(facingMode);
 
-  <script>
-    // 📸 요소
-    const video = document.getElementById('camera');
-    const canvas = document.getElementById('snapshot');
-    const preview = document.getElementById('preview');
-    const filterOverlay = document.getElementById('filter-overlay');
-    const controls = document.getElementById('controls');
-    const toggleFilterBtn = document.getElementById('toggleFilterBtn');
-    const filterPanel = document.getElementById('filter-panel');
-    const closeFilterBtn = document.getElementById('closeFilterBtn');
-    const opacitySlider = document.getElementById('opacitySlider');
-    const opacityValue = document.getElementById('opacityValue');
-    const filterSelector = document.getElementById('filter-selector');
-    const switchBtn = document.getElementById('switchBtn');
-    const captureBtn = document.getElementById('captureBtn');
-    const retryBtn = document.getElementById('retryBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const shareBtn = document.getElementById('shareBtn');
+// 🔄 전후면 전환
+switchBtn.addEventListener('click', ()=> {
+  facingMode = (facingMode === 'user') ? 'environment' : 'user';
+  initCamera(facingMode);
+});
 
-    // 📱 상태 변수
-    let stream;
-    let facingMode = 'environment'; // 기본 후면
-    let currentFilter = 'filter1.png';
-    let currentOpacity = 1.0;
-    let filterPanelOpen = false;
-    let uiVisible = true;
-    let uiTimer;
+// 🎨 필터 기본 설정
+filterOverlay.style.backgroundImage = `url('${currentFilter}')`;
 
-    // ✅ 실제 화면 높이 반영
-    function setRealVH() {
-      const vh = window.innerHeight * 0.01;
-      document.documentElement.style.setProperty('--vh', `${vh}px`);
-    }
-    window.addEventListener('resize', setRealVH);
-    window.addEventListener('orientationchange', setRealVH);
-    setRealVH();
+// ✅ 비율 보정 캡처 함수 (핵심)
+function drawVideoToCanvas() {
+  const vw = video.videoWidth;
+  const vh = video.videoHeight;
+  const cw = vw;
+  const ch = vh;
+  canvas.width = cw;
+  canvas.height = ch;
+  const ctx = canvas.getContext('2d');
 
-    // ✅ 카메라 시작
-    async function initCamera(mode = 'environment') {
-      if (stream) stream.getTracks().forEach(t => t.stop());
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: mode }, audio: false });
-        video.srcObject = stream;
-        facingMode = mode;
-        console.log('✅ 카메라 시작:', mode);
-      } catch (err) {
-        alert('❌ 카메라 접근 실패: ' + err.message);
-      }
-    }
-    initCamera(facingMode);
+  // 영상화면 vs 캔버스 비율 맞춰서 crop 계산
+  const videoRatio = vw / vh; // 1.78 (16:9 예시)
+  const displayRatio = video.clientWidth / video.clientHeight; // 예: 0.75 (3:4)
+  
+  let sx = 0, sy = 0, sw = vw, sh = vh;
+  
+  if (displayRatio > videoRatio) {
+    // 화면이 더 넓을 때 → 세로 crop
+    sh = vw / displayRatio;
+    sy = (vh - sh) / 2;
+  } else if (displayRatio < videoRatio) {
+    // 화면이 더 높을 때 → 가로 crop
+    sw = vh * displayRatio;
+    sx = (vw - sw) / 2;
+  }
 
-    // 🔄 카메라 전/후면 전환
-    switchBtn.addEventListener('click', () => {
-      facingMode = (facingMode === 'user') ? 'environment' : 'user';
-      initCamera(facingMode);
-    });
+  // 실제 crop된 영상 그리기
+  ctx.drawImage(video, sx, sy, sw, sh, 0, 0, cw, ch);
 
-    // 🎨 필터 초기 세팅
-    filterOverlay.style.backgroundImage = `url('${currentFilter}')`;
-    opacitySlider.addEventListener('input', e => {
-      const v = e.target.value;
-      currentOpacity = v / 100;
-      filterOverlay.style.opacity = currentOpacity;
-      opacityValue.textContent = v + '%';
-    });
+  // 필터 합성
+  const filter = new Image();
+  filter.src = currentFilter;
+  filter.onload = () => {
+    ctx.globalAlpha = currentOpacity;
+    ctx.drawImage(filter, 0, 0, cw, ch);
+    ctx.globalAlpha = 1.0;
+    preview.src = canvas.toDataURL('image/png');
+    preview.style.display = 'block';
+    captureBtn.style.display = 'none';
+    retryBtn.style.display = 'inline-block';
+    saveBtn.disabled = false;
+  };
+}
 
-    filterSelector.addEventListener('click', e => {
-      if (e.target.classList.contains('filter-option')) {
-        document.querySelectorAll('.filter-option').forEach(opt => opt.classList.remove('selected'));
-        e.target.classList.add('selected');
-        currentFilter = e.target.dataset.src;
-        filterOverlay.style.backgroundImage = `url('${currentFilter}')`;
-      }
-    });
+// 📸 촬영
+captureBtn.addEventListener('click', drawVideoToCanvas);
 
-    // 🎨 필터 패널 열기 / 닫기
-    toggleFilterBtn.addEventListener('click', () => {
-      filterPanel.style.display = 'block';
-      controls.classList.add('hidden');
-      filterPanelOpen = true;
-    });
+// ↩ 다시
+retryBtn.addEventListener('click', ()=>{
+  preview.style.display = 'none';
+  captureBtn.style.display = 'inline-block';
+  retryBtn.style.display = 'none';
+  saveBtn.disabled = true;
+});
 
-    closeFilterBtn.addEventListener('click', () => {
-      filterPanel.style.display = 'none';
-      filterPanelOpen = false;
-      controls.classList.remove('hidden');
-      uiVisible = true;
-      clearTimeout(uiTimer);
-      uiTimer = setTimeout(hideControls, 3000);
-    });
-
-    // 📸 촬영
-    captureBtn.addEventListener('click', () => {
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-
-      // 영상 캡처
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-      // 필터 합성
-      const filter = new Image();
-      filter.src = currentFilter;
-      filter.onload = () => {
-        ctx.globalAlpha = currentOpacity;
-        ctx.drawImage(filter, 0, 0, canvas.width, canvas.height);
-        ctx.globalAlpha = 1;
-        preview.src = canvas.toDataURL('image/png');
-        preview.style.display = 'block';
-        saveBtn.disabled = false;
-        shareBtn.disabled = false;
-        captureBtn.style.display = 'none';
-        retryBtn.style.display = 'inline-block';
-      };
-    });
-
-    // ↩ 다시 촬영
-    retryBtn.addEventListener('click', () => {
-      preview.style.display = 'none';
-      captureBtn.style.display = 'inline-block';
-      retryBtn.style.display = 'none';
-      saveBtn.disabled = true;
-      shareBtn.disabled = true;
-    });
-
-    // 💾 저장
-    saveBtn.addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = 'photo.png';
-      link.href = preview.src;
-      link.click();
-    });
-
-    // 📤 공유
-    shareBtn.addEventListener('click', async () => {
-      try {
-        const response = await fetch(preview.src);
-        const blob = await response.blob();
-        const file = new File([blob], 'photo.png', { type: 'image/png' });
-        if (navigator.share) {
-          await navigator.share({
-            files: [file],
-            title: '나의 사진',
-            text: '촬영한 사진을 공유합니다 📸',
-          });
-        } else {
-          alert('이 브라우저에서는 공유 기능이 지원되지 않습니다.');
-        }
-      } catch (err) {
-        alert('공유 실패: ' + err.message);
-      }
-    });
-
-    // 🧠 오토UI (버튼 자동 숨김)
-    function showControls() {
-      if (uiVisible || filterPanelOpen) return;
-      uiVisible = true;
-      controls.classList.remove('hidden');
-      clearTimeout(uiTimer);
-      uiTimer = setTimeout(hideControls, 3000);
-    }
-
-    function hideControls() {
-      if (filterPanelOpen) return;
-      uiVisible = false;
-      controls.classList.add('hidden');
-    }
-
-    uiTimer = setTimeout(hideControls, 3000);
-    document.body.addEventListener('touchstart', showControls);
-    document.body.addEventListener('click', showControls);
-  </script>
+// 💾 저장
+saveBtn.addEventListener('click', ()=>{
+  const a = document.createElement('a');
+  a.href = preview.src;
+  a.download = 'photo.png';
+  a.click();
+});
+</script>
 </body>
 </html>
