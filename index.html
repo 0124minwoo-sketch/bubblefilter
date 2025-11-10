@@ -27,6 +27,7 @@
       overflow: hidden;
       border-radius: 12px;
     }
+
     video {
       width: 100%;
       height: 100%;
@@ -36,11 +37,12 @@
     #filter-overlay {
       position: absolute;
       inset: 0;
-      background-image: url('filter.png'); /* 필터용 PNG 이미지 경로 */
+      background-image: url('filter.png'); /* 필터 PNG 파일 */
       background-size: cover;
       background-position: center;
-      opacity: 0.4; /* 불투명도 조정 */
+      opacity: 1.0; /* 기본 불투명도 100% */
       pointer-events: none;
+      transition: opacity 0.2s;
     }
 
     #preview {
@@ -73,6 +75,24 @@
       background-color: #555;
       cursor: not-allowed;
     }
+
+    #slider-container {
+      margin-top: 15px;
+      width: 80%;
+      max-width: 400px;
+      text-align: center;
+    }
+
+    input[type="range"] {
+      width: 100%;
+    }
+
+    label {
+      display: block;
+      font-size: 0.9em;
+      color: #ddd;
+      margin-bottom: 4px;
+    }
   </style>
 </head>
 <body>
@@ -83,6 +103,11 @@
 
   <canvas id="snapshot" style="display:none;"></canvas>
   <img id="preview" alt="촬영된 이미지" />
+
+  <div id="slider-container">
+    <label for="opacitySlider">필터 투명도 조절: <span id="opacityValue">100%</span></label>
+    <input type="range" id="opacitySlider" min="0" max="100" value="100" />
+  </div>
 
   <div id="controls">
     <button id="switchBtn">🔄 카메라 전환</button>
@@ -99,11 +124,15 @@
     const captureBtn = document.getElementById('captureBtn');
     const saveBtn = document.getElementById('saveBtn');
     const shareBtn = document.getElementById('shareBtn');
+    const filterOverlay = document.getElementById('filter-overlay');
+    const opacitySlider = document.getElementById('opacitySlider');
+    const opacityValue = document.getElementById('opacityValue');
 
-    let currentFacingMode = 'user'; // 기본은 전면 카메라
+    let currentFacingMode = 'user'; // 전면 기본
     let stream;
+    let currentOpacity = 1.0; // 기본 불투명도 100%
 
-    // 카메라 초기화 함수
+    // 카메라 초기화
     async function initCamera(facingMode = 'user') {
       if (stream) {
         const tracks = stream.getTracks();
@@ -122,13 +151,21 @@
       }
     }
 
-    // 처음 카메라 실행
     initCamera(currentFacingMode);
 
-    // 카메라 전환 버튼 클릭 시
+    // 카메라 전환
     switchBtn.addEventListener('click', () => {
       currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
       initCamera(currentFacingMode);
+    });
+
+    // 투명도 슬라이더 조절
+    opacitySlider.addEventListener('input', e => {
+      const value = e.target.value;
+      const opacity = value / 100;
+      currentOpacity = opacity;
+      filterOverlay.style.opacity = opacity;
+      opacityValue.textContent = `${value}%`;
     });
 
     // 사진 촬영
@@ -138,11 +175,10 @@
       canvas.height = video.videoHeight;
       context.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-      // 필터 오버레이 적용
       const filter = new Image();
       filter.src = 'filter.png';
       filter.onload = () => {
-        context.globalAlpha = 0.4; // 필터 불투명도
+        context.globalAlpha = currentOpacity; // 현재 투명도 반영
         context.drawImage(filter, 0, 0, canvas.width, canvas.height);
         context.globalAlpha = 1.0;
 
