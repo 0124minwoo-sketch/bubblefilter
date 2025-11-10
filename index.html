@@ -1,247 +1,234 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>카메라 촬영 및 저장/공유</title>
-  <style>
-    body {
-      margin: 0;
-      padding: 0;
-      background-color: #000;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: flex-start;
-      height: 100vh;
-      color: white;
-      font-family: sans-serif;
-      overflow: hidden;
-    }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>카메라 촬영 및 저장/공유</title>
+<style>
+  body {
+    margin: 0;
+    padding: 0;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100vh;
+    overflow: hidden;
+    color: white;
+    font-family: sans-serif;
+  }
 
-    #camera-container {
-      position: relative;
-      flex: 1;
-      width: 100%;
-      max-width: 600px;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-      background: black;
-    }
+  #camera-container {
+    position: relative;
+    flex: 1;
+    width: 100%;
+    max-width: 600px;
+    background: black;
+    overflow: hidden;
+  }
 
-    video, #preview {
-      width: 100%;
-      height: 100%;
-      object-fit: cover;
-      position: absolute;
-      left: 0;
-      top: 0;
-    }
+  video, #preview {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+  }
 
-    #preview {
-      display: none;
-      z-index: 2;
-    }
+  #filter-overlay {
+    position: absolute;
+    inset: 0;
+    background-image: url('filter.png');
+    background-size: cover;
+    background-position: center;
+    opacity: 1;
+    pointer-events: none;
+    z-index: 1;
+  }
 
-    #filter-overlay {
-      position: absolute;
-      inset: 0;
-      background-image: url('filter.png'); /* 필터 이미지 */
-      background-size: cover;
-      background-position: center;
-      opacity: 1;
-      pointer-events: none;
-      z-index: 1;
-      transition: opacity 0.2s;
-    }
+  #slider-container {
+    width: 80%;
+    max-width: 400px;
+    text-align: center;
+    margin: 10px 0;
+  }
 
-    #slider-container {
-      width: 80%;
-      max-width: 400px;
-      text-align: center;
-      margin: 10px 0;
-    }
+  input[type="range"] { width: 100%; }
 
-    input[type="range"] {
-      width: 100%;
-    }
+  #controls {
+    position: fixed;
+    bottom: 10px;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    z-index: 100;
+    background: rgba(0,0,0,0.5);
+    padding: 10px 0;
+    backdrop-filter: blur(4px);
+  }
 
-    #controls {
-      position: fixed;
-      bottom: 10px;
-      left: 0;
-      width: 100%;
-      display: flex;
-      justify-content: center;
-      flex-wrap: wrap;
-      gap: 10px;
-      z-index: 99;
-      background: rgba(0, 0, 0, 0.5);
-      padding: 10px 0;
-      backdrop-filter: blur(5px);
-    }
+  button {
+    background-color: #1e90ff;
+    border: none;
+    color: white;
+    padding: 10px 16px;
+    font-size: 1em;
+    border-radius: 6px;
+    cursor: pointer;
+  }
 
-    button {
-      background-color: #1e90ff;
-      border: none;
-      color: white;
-      padding: 10px 16px;
-      font-size: 1em;
-      border-radius: 6px;
-      cursor: pointer;
-    }
+  #preview { display: none; z-index: 2; }
 
-    button:disabled {
-      background-color: #555;
-      cursor: not-allowed;
-    }
-
-    label {
-      display: block;
-      font-size: 0.9em;
-      color: #ddd;
-      margin-bottom: 4px;
-    }
-  </style>
+</style>
 </head>
-
 <body>
-  <div id="camera-container">
-    <video id="camera" autoplay playsinline></video>
-    <div id="filter-overlay"></div>
-    <img id="preview" alt="촬영된 이미지" />
-  </div>
 
-  <div id="slider-container">
-    <label for="opacitySlider">
-      필터 투명도 조절: <span id="opacityValue">100%</span>
-    </label>
-    <input type="range" id="opacitySlider" min="0" max="100" value="100" />
-  </div>
+<div id="camera-container">
+  <video id="camera" autoplay playsinline></video>
+  <div id="filter-overlay"></div>
+  <img id="preview" alt="촬영된 이미지">
+</div>
 
-  <canvas id="snapshot" style="display:none;"></canvas>
+<div id="slider-container">
+  <label for="opacitySlider">필터 투명도: <span id="opacityValue">100%</span></label>
+  <input type="range" id="opacitySlider" min="0" max="100" value="100">
+</div>
 
-  <div id="controls">
-    <button id="switchBtn">🔄 카메라 전환</button>
-    <button id="captureBtn">📸 촬영</button>
-    <button id="saveBtn" disabled>💾 저장</button>
-    <button id="shareBtn" disabled>📤 공유</button>
-    <button id="retryBtn" style="display:none;">↩ 다시 촬영</button>
-  </div>
+<canvas id="snapshot" style="display:none;"></canvas>
 
-  <script>
-    const video = document.getElementById('camera');
-    const canvas = document.getElementById('snapshot');
-    const preview = document.getElementById('preview');
-    const filterOverlay = document.getElementById('filter-overlay');
-    const switchBtn = document.getElementById('switchBtn');
-    const captureBtn = document.getElementById('captureBtn');
-    const saveBtn = document.getElementById('saveBtn');
-    const shareBtn = document.getElementById('shareBtn');
-    const retryBtn = document.getElementById('retryBtn');
-    const opacitySlider = document.getElementById('opacitySlider');
-    const opacityValue = document.getElementById('opacityValue');
+<div id="controls">
+  <button id="switchBtn">🔄 전/후면 전환</button>
+  <button id="captureBtn">📸 촬영</button>
+  <button id="retryBtn" style="display:none;">↩ 다시</button>
+  <button id="saveBtn" disabled>💾 저장</button>
+  <button id="shareBtn" disabled>📤 공유</button>
+</div>
 
-    let stream;
-    let currentFacingMode = 'environment'; // ✅ 기본값을 후면 카메라로 변경
-    let currentOpacity = 1.0;
+<script>
+const video = document.getElementById('camera');
+const canvas = document.getElementById('snapshot');
+const preview = document.getElementById('preview');
+const filterOverlay = document.getElementById('filter-overlay');
+const captureBtn = document.getElementById('captureBtn');
+const retryBtn = document.getElementById('retryBtn');
+const saveBtn = document.getElementById('saveBtn');
+const shareBtn = document.getElementById('shareBtn');
+const switchBtn = document.getElementById('switchBtn');
+const opacitySlider = document.getElementById('opacitySlider');
+const opacityValue = document.getElementById('opacityValue');
 
-    // 카메라 실행
-    async function initCamera(facingMode = 'environment') {
-      if (stream) stream.getTracks().forEach(track => track.stop());
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode },
-          audio: false
-        });
-        video.srcObject = stream;
-        currentFacingMode = facingMode;
-      } catch (err) {
-        alert("카메라 접근 오류: " + err.message);
-      }
+let stream;
+let currentFacingMode = 'environment'; // 후면카메라 기본
+let currentOpacity = 1.0;
+
+// 영상 스트림 시작
+async function initCamera(facingMode = 'environment') {
+  if (stream) stream.getTracks().forEach(t=>t.stop());
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode }
+    });
+    video.srcObject = stream;
+    currentFacingMode = facingMode;
+  } catch (err) {
+    alert('카메라 접근 오류: ' + err.message);
+  }
+}
+initCamera(currentFacingMode);
+
+// 카메라 전환
+switchBtn.addEventListener('click', ()=>{
+  currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
+  initCamera(currentFacingMode);
+});
+
+// 투명도 조절
+opacitySlider.addEventListener('input', e=>{
+  const value = e.target.value;
+  currentOpacity = value/100;
+  opacityValue.textContent = `${value}%`;
+  filterOverlay.style.opacity = currentOpacity;
+});
+
+// ✅ 촬영 로직 수정 (비율 유지)
+captureBtn.addEventListener('click', ()=>{
+  const videoRatio = video.videoWidth / video.videoHeight;
+  const displayRatio = video.clientWidth / video.clientHeight;
+
+  let drawWidth = video.videoWidth;
+  let drawHeight = video.videoHeight;
+
+  // 캔버스 크기 고정: 영상 원본 비율 유지
+  canvas.width = drawWidth;
+  canvas.height = drawHeight;
+
+  const ctx = canvas.getContext('2d');
+
+  // 실제 해상도 기준으로 프레임 캡처
+  ctx.drawImage(video, 0, 0, drawWidth, drawHeight);
+
+  // 필터 오버레이 (filter.png는 2500x2500이라 비율 맞춰서 그리기)
+  const filter = new Image();
+  filter.src = 'filter.png';
+  filter.onload = ()=>{
+    // cover 방식으로 필터 이미지 맞추기
+    const imgRatio = filter.width / filter.height;
+    let fw, fh, fx, fy;
+    if (imgRatio > videoRatio) {
+      // 필터가 더 가로로 넓으면 높이에 기준
+      fh = drawHeight;
+      fw = filter.width * (fh / filter.height);
+      fx = (drawWidth - fw) / 2;
+      fy = 0;
+    } else {
+      // 필터가 세로로 길면 폭에 기준
+      fw = drawWidth;
+      fh = filter.height * (fw / filter.width);
+      fx = 0;
+      fy = (drawHeight - fh) / 2;
     }
 
-    // 페이지 로드시 기본 후면 카메라 실행
-    initCamera(currentFacingMode);
+    ctx.globalAlpha = currentOpacity;
+    ctx.drawImage(filter, fx, fy, fw, fh);
+    ctx.globalAlpha = 1.0;
 
-    // 카메라 전환 기능
-    switchBtn.addEventListener('click', () => {
-      currentFacingMode = currentFacingMode === 'user' ? 'environment' : 'user';
-      initCamera(currentFacingMode);
-    });
+    preview.src = canvas.toDataURL('image/png');
+    preview.style.display = 'block';
+    captureBtn.style.display = 'none';
+    retryBtn.style.display = 'inline-block';
+    saveBtn.disabled = false;
+    shareBtn.disabled = false;
+  };
+});
 
-    // 투명도 슬라이더
-    opacitySlider.addEventListener('input', e => {
-      const value = e.target.value;
-      const opacity = value / 100;
-      currentOpacity = opacity;
-      filterOverlay.style.opacity = opacity;
-      opacityValue.textContent = `${value}%`;
-    });
+// 다시 촬영
+retryBtn.addEventListener('click', ()=>{
+  preview.style.display = 'none';
+  captureBtn.style.display = 'inline-block';
+  retryBtn.style.display = 'none';
+  saveBtn.disabled = true;
+  shareBtn.disabled = true;
+});
 
-    // 촬영
-    captureBtn.addEventListener('click', () => {
-      const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+// 저장
+saveBtn.addEventListener('click', ()=>{
+  const a = document.createElement('a');
+  a.download = 'photo.png';
+  a.href = preview.src;
+  a.click();
+});
 
-      const filter = new Image();
-      filter.src = 'filter.png';
-      filter.onload = () => {
-        context.globalAlpha = currentOpacity;
-        context.drawImage(filter, 0, 0, canvas.width, canvas.height);
-        context.globalAlpha = 1;
-
-        const dataUrl = canvas.toDataURL('image/png');
-        preview.src = dataUrl;
-        preview.style.display = 'block';
-
-        saveBtn.disabled = false;
-        shareBtn.disabled = false;
-        captureBtn.style.display = 'none';
-        retryBtn.style.display = 'inline-block';
-      };
-    });
-
-    // 다시 촬영
-    retryBtn.addEventListener('click', () => {
-      preview.style.display = 'none';
-      captureBtn.style.display = 'inline-block';
-      retryBtn.style.display = 'none';
-      saveBtn.disabled = true;
-      shareBtn.disabled = true;
-    });
-
-    // 저장
-    saveBtn.addEventListener('click', () => {
-      const link = document.createElement('a');
-      link.download = 'photo.png';
-      link.href = preview.src;
-      link.click();
-    });
-
-    // 공유
-    shareBtn.addEventListener('click', async () => {
-      if (navigator.share) {
-        try {
-          const response = await fetch(preview.src);
-          const blob = await response.blob();
-          const file = new File([blob], 'photo.png', { type: 'image/png' });
-          await navigator.share({
-            files: [file],
-            title: '나의 사진',
-            text: '촬영한 사진을 공유합니다!',
-          });
-        } catch (err) {
-          alert('공유 실패: ' + err.message);
-        }
-      } else {
-        alert('이 브라우저에서는 공유 기능이 지원되지 않습니다.');
-      }
-    });
-  </script>
+// 공유
+shareBtn.addEventListener('click', async ()=>{
+  if (navigator.share) {
+    const res = await fetch(preview.src);
+    const blob = await res.blob();
+    const file = new File([blob], 'photo.png',{type:'image/png'});
+    await navigator.share({files:[file], title:'나의 사진'});
+  } else alert('브라우저가 공유를 지원하지 않습니다.');
+});
+</script>
 </body>
 </html>
